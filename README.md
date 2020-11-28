@@ -5,7 +5,7 @@
 `ip-update` does:
 - fetch device's wan ip address
 - publish new ip to NATS server or output to stdout
-  - conpare current ip address, then if no update, no publish happens
+  - compare current ip address, then if no update, no publish happens
 
 ## How to use
 
