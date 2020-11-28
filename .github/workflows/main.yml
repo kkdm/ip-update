@@ -57,7 +57,7 @@ jobs:
         env:
           SLACK_CHANNEL: git-notify
           SLACK_ICON: https://drive.google.com/file/d/1S8oCfEHwrfBlGWhh3mxrE58kDUQpn-Gb/view?usp=sharing
-          SLACK_MESSAGE: "https://github.com/kkdm/kdmw/releases/download/${{ env.VERSION }}/static-files.zip"
+          SLACK_MESSAGE: "https://github.com/kkdm/ip-update/releases/download/${{ env.VERSION }}/ip-update"
           SLACK_TITLE: Release ${{ env.VERSION }}
           SLACK_USERNAME: machi
           SLACK_WEBHOOK: ${{ secrets.MACHI_INCOMING_WEBHOOK }}
