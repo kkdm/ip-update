@@ -280,6 +280,6 @@ mod tests {
     #[test]
     fn test_get_current_ip() {
         let token = env::var("TOKEN").unwrap();
-        assert_eq!(get_current_ip(&token, &"kdmw.dev".to_string()).unwrap(), "60.236.13.148");
+        assert_eq!(get_current_ip(&token, &"example.com".to_string()).unwrap(), "93.184.216.34");
     }
 }
