@@ -18,8 +18,11 @@ struct Opt {
     #[structopt(short = "o", long ="stdout")] 
     stdout: bool,
 
-    #[structopt(short = "s", long ="server", default_value = "localhost", required_if("stdout", "false"))] 
-    server: String,
+    #[structopt(short = "f", long ="force")] 
+    force: bool,
+
+    #[structopt(short = "e", long ="endpoint", default_value = "http://localhost/publish", required_if("stdout", "false"))] 
+    endpoint: String,
 
     #[structopt(short = "S", long ="subject", default_value = "new_ip")] 
     subject: String, 
@@ -60,7 +63,7 @@ struct PubResult {
 fn get_possible_ips(dest: &String) -> Option<Vec<(String, String)>> {
     let if_idx_oid = &[1,3,6,1,2,1,4,20,1,2,];
     let community = "private".as_bytes();
-    let timeout = Duration::from_secs(2);
+    let timeout = Duration::from_secs(5);
     let non_repeaters = 0;
     let max_repetitions = 4;
     
@@ -77,7 +80,7 @@ fn get_possible_ips(dest: &String) -> Option<Vec<(String, String)>> {
     let possible_ips: Vec<(String, String)> = response.varbinds
         .filter(|(name, _)| 
             !(name.to_string().contains("127.0.0.1") || 
-            name.to_string().contains("192.168.0.1")))
+            name.to_string().contains("192.168.1.1")))
         .map(|(name, val)| 
             (name.to_string().replace("1.3.6.1.2.1.4.20.1.2.", ""),
             format!("{:?}", val).replace("INTEGER: ", "")))
@@ -200,13 +203,13 @@ fn get_current_ip(token: &String, doman: &String) -> Result<String, String> {
     }
 }
 
-fn publish_new_ip(new_ip: &String, server: &String, subject: &String) -> Result<(), String> {
+fn publish_new_ip(new_ip: &String, endpoint: &String, subject: &String, domain: &String) -> Result<(), String> {
     let message = PubRequest {
         subject: subject.clone(),
-        message: new_ip.clone()
+        message: format!("{}:{}", domain, new_ip),
     };
     let resp = 
-        ureq::post(&format!("{}", server).as_str())
+        ureq::post(&format!("{}", endpoint).as_str())
               .set("Content-type", "application/json")
               .send_json(serde_json::value::to_value(message).unwrap());
 
@@ -254,7 +257,7 @@ fn main() {
         }
     };
 
-    if wan_ip == current_ip {
+    if wan_ip == current_ip && !opt.force {
         debug!("no ip change");
         process::exit(0);        
     }
@@ -264,11 +267,11 @@ fn main() {
         process::exit(0);        
     };
 
-    if let Err(e) = publish_new_ip(&wan_ip, &opt.server, &opt.subject) {
+    if let Err(e) = publish_new_ip(&wan_ip, &opt.endpoint, &opt.subject, &opt.domain) {
         error!("failed to publish new ip: {}", e);
     };
 
-    info!("published new ip: {}, server: {}", &wan_ip, &opt.server);
+    info!("published new ip: {}, server: {}", &wan_ip, &opt.endpoint);
 }
 
 #[cfg(test)]
