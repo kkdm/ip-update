@@ -20,12 +20,6 @@ struct Opt {
 
     #[structopt(short = "f", long ="force")] 
     force: bool,
-
-    #[structopt(short = "e", long ="endpoint", default_value = "http://localhost/publish", required_if("stdout", "false"))] 
-    endpoint: String,
-
-    #[structopt(short = "S", long ="subject", default_value = "new_ip")] 
-    subject: String, 
 }
 
 #[derive(Deserialize)]
@@ -40,6 +34,7 @@ struct ZoneIdResult {
 
 #[derive(Deserialize)]
 struct DnsItem {
+    id: String,
     content: String,
 }
 
@@ -48,16 +43,10 @@ struct DnsResult {
     result: Vec<DnsItem>,
 }
 
-#[derive(Serialize)]
-struct PubRequest {
-    subject: String,
-    message: String,
-}
-
-#[derive(Deserialize)]
-struct PubResult {
-    ok: bool,
-    message: String,
+struct DnsInfo {
+    zone: String,
+    dns: String,
+    ip: String,
 }
 
 fn get_possible_ips(dest: &String) -> Option<Vec<(String, String)>> {
@@ -123,7 +112,6 @@ fn get_possible_indexes(dest: &String) -> Option<Vec<String>> {
 }
 
 fn get_wan_ip(dest: &String) -> Option<String> {
-
     let possible_ips = match get_possible_ips(dest) {
         Some(ips) => ips,
         None => return None
@@ -166,7 +154,7 @@ fn get_zone_id(token: &String, domain: &String) -> Option<String> {
     }
 }
 
-fn get_ip(token: &String, zone_id: &String) -> Option<String> {
+fn get_ip(token: &String, zone_id: &String) -> Option<DnsInfo> {
     let endpoint = 
         format!(
             "https://api.cloudflare.com/client/v4/zones/{}/dns_records", zone_id);
@@ -180,8 +168,12 @@ fn get_ip(token: &String, zone_id: &String) -> Option<String> {
 
     match resp.into_json_deserialize::<DnsResult>() {
         Ok(ref mut obj) => {
-            if let Some(DnsItem { content }) = obj.result.pop() {
-                Some(content.to_string())
+            if let Some(DnsItem { id, content }) = obj.result.pop() {
+                Some(DnsInfo { 
+                    zone: zone_id.to_string(),
+                    dns: id.to_string(),
+                    ip: content.to_string(),
+                })
             }
             else {
                 None
@@ -191,41 +183,38 @@ fn get_ip(token: &String, zone_id: &String) -> Option<String> {
     }
 }
 
-fn get_current_ip(token: &String, doman: &String) -> Result<String, String> {
+fn get_current_ip(token: &String, doman: &String) -> Result<DnsInfo, String> {
     let zone_id = match get_zone_id(token, doman) {
         Some(id) => id,
         None => return Err("couldn't get zone id".to_string()),
     };
 
     match get_ip(token, &zone_id) {
-        Some(ip) => Ok(ip),
+        Some(info) => Ok(info),
         None => return Err("couldn't get current ip address".to_string()),
     }
 }
 
-fn publish_new_ip(new_ip: &String, endpoint: &String, subject: &String, domain: &String) -> Result<(), String> {
-    let message = PubRequest {
-        subject: subject.clone(),
-        message: format!("{}:{}", domain, new_ip),
-    };
+fn publish_new_ip(new_ip: &String, token: &String, dns_info: &DnsInfo, domain: &String) -> Result<(), String> {
     let resp = 
-        ureq::post(&format!("{}", endpoint).as_str())
-              .set("Content-type", "application/json")
-              .send_json(serde_json::value::to_value(message).unwrap());
+        ureq::put(&format!(
+            "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
+                dns_info.zone, dns_info.dns))
+        .set("Authorization", format!("Bearer {}", token).as_str())
+        .set("Content-type", "application/json")
+        .send_json(ureq::json!({
+            "type": "A",
+            "name": domain,
+            "content": new_ip,
+            "ttl": 120,
+            "proxied": true
+        }));
 
     if !resp.ok() {
         return Err(resp.into_string().unwrap_or("could not get response".to_string()));
     };
 
-    match resp.into_json_deserialize::<PubResult>() {
-        Ok(ref mut obj) if !obj.ok => {
-            return Err(format!("failed to publish message: {}", obj.message));
-        },
-        Ok(ref mut _obj) => {
-            Ok(())
-        },
-        Err(_) => Err("failed to parse response".to_string())
-    }    
+    Ok(())
 }
 
 fn main() {
@@ -233,10 +222,18 @@ fn main() {
     env_logger::init();
     let opt = Opt::from_args();
 
-    let token = match env::var("TOKEN") {
+    let read_token = match env::var("READ_TOKEN") {
         Ok(token) => token,
         Err(_) => {
-            error!("environment variable TOKEN not defined");
+            error!("environment variable READ_TOKEN not defined");
+            process::exit(1);
+        }
+    };
+
+    let edit_token = match env::var("EDIT_TOKEN") {
+        Ok(token) => token,
+        Err(_) => {
+            error!("environment variable EDIT_TOKEN not defined");
             process::exit(1);
         }
     };
@@ -249,15 +246,15 @@ fn main() {
         }
     };
 
-    let current_ip = match get_current_ip(&token, &opt.domain) {
-        Ok(ip) => ip,
+    let dns_info = match get_current_ip(&read_token, &opt.domain) {
+        Ok(info) => info,
         Err(e) => {
             error!("error: {}", e);
             process::exit(1);
         }
     };
 
-    if wan_ip == current_ip && !opt.force {
+    if wan_ip == dns_info.ip && !opt.force {
         debug!("no ip change");
         process::exit(0);        
     }
@@ -267,11 +264,11 @@ fn main() {
         process::exit(0);        
     };
 
-    if let Err(e) = publish_new_ip(&wan_ip, &opt.endpoint, &opt.subject, &opt.domain) {
+    if let Err(e) = publish_new_ip(&wan_ip, &edit_token, &dns_info, &opt.domain) {
         error!("failed to publish new ip: {}", e);
     };
 
-    info!("published new ip: {}, server: {}", &wan_ip, &opt.endpoint);
+    info!("published new ip: {}, server: {}", &wan_ip, &opt.domain);
 }
 
 #[cfg(test)]
