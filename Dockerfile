@@ -8,4 +8,4 @@ FROM scratch
 
 COPY --from=builder /build/target/release/ip-update /usr/local/bin/
 
-ENTRYPOINT ["ip-update"]
+ENTRYPOINT ["/usr/local/bin/ip-update"]
