@@ -4,7 +4,7 @@ COPY . /build
 WORKDIR /build
 RUN make build
 
-FROM slim
+FROM debian:stretch-slim
 
 COPY --from=builder /build/target/release/ip-update /usr/local/bin/
 RUN ls -l /usr/local/bin
