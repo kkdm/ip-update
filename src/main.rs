@@ -4,8 +4,7 @@ use std::time::Duration;
 use snmp::SyncSession;
 use structopt::StructOpt;
 use std::{process, env};
-use serde::{Serialize, Deserialize};
-use serde_json;
+use serde::Deserialize;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
