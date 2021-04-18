@@ -6,6 +6,6 @@ RUN make build
 
 FROM scratch
 
-COPY --from=/build/target/release/ip-update /usr/local/bin/
+COPY --from=builder /build/target/release/ip-update /usr/local/bin/
 
 ENTRYPOINT ["ip-update"]
