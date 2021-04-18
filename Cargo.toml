@@ -1,6 +1,6 @@
 [package]
 name = "ip-update"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Keitaro Kodama <keitaro.kdm@gmail.com>"]
 edition = "2018"
 
