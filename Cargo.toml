@@ -10,7 +10,7 @@ edition = "2018"
 snmp = "*"
 structopt = "*"
 chrono = "*"
-ureq = { version = "*", features = ["json"] }
+ureq = { version = "1.5.*", features = ["json"] }
 serde = "*"
 serde_json = "1.0.*"
 log = "0.4.0"
